@@ -64,6 +64,7 @@ class WebServerClass(object):
     '''
     mRunning = False
     mMyIp = None
+    mServingAddress = None
 
 
     def __init__(self, folder=None):
@@ -95,6 +96,9 @@ class WebServerClass(object):
 
     def getWorkingFolder(self):
         return self.mFolder
+    
+    def getBaseAddress(self):
+        return self.mServingAddress
 
     def startServingRequests(self):
         RootedHTTPServer.allow_reuse_address = True
@@ -106,6 +110,7 @@ class WebServerClass(object):
         self.mThread.start()
         print "Serving HTTP ", NAME, " on ", self.mMyIp, "port", sa[1], "-> folder:\n", self.mFolder
         self.mRunnnig = True
+        self.mServingAddress = str("http://"+str(self.mMyIp)+":"+str(sa[1]))
 
     def stopServingRequests(self):
         if not self.mThread is None and not self.mHttpd is None:

@@ -4,16 +4,16 @@ Created on May 13, 2017
 @author: guido
 '''
 
-from __future__ import print_function
 from cmd import Cmd
-import time
-import pychromecast
+
 from WebServer import WebServerClass
+from Caster import CasterThread
 from instagram.client import InstagramAPI
 
 class MyPrompt(Cmd):
 
     WebS = None
+    Caster = None
     
     def do_startWeb(self, args):
         if len(args) == 0:
@@ -38,6 +38,16 @@ class MyPrompt(Cmd):
         else:
             name = args
         print("Hello, %s", name)
+    
+    def do_castConnect(self, args):
+        if self.Caster is None:
+            self.Caster = CasterThread(self.WebS.getWorkingFolder(), 10, self.WebS)
+        self.Caster.connectTo(args)
+    
+    def do_cast(self, args):
+        if self.Caster is None:
+            self.Caster = CasterThread(self.WebS.getWorkingFolder(), 10, self.WebS)
+        self.Caster.start()
 
     def do_quit(self, args):
         """Quits the program."""
