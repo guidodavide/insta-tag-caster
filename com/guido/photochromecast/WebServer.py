@@ -56,6 +56,15 @@ class RootedHTTPRequestHandler(SimpleHTTPRequestHandler):
                 continue
             path = os.path.join(path, word)
         return path
+    
+    def log_message(self, format, *args):
+        pass
+    
+    def log_request(self, code='-', size='-'):
+        pass
+    
+    def log_error(self, format, *args):
+        pass
 
 
 class WebServerClass(object):
