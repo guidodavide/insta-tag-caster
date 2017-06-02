@@ -134,7 +134,7 @@ class CasterThread(object):
             return
 
         intVal = int(newTimer)
-        if intVal == self.mDCycle:
+        if intVal == self.mDCycle or intVal <= 0 or intVal > 60:
             '''No change to the current slideshow time'''
             return
 
@@ -244,7 +244,7 @@ class CasterThread(object):
                 mc.block_until_active()
                 mc.pause()
                 mc.play()
-                delayChange = 1.8
+                delayChange = 2.1
             else:
                 delayChange = 0
             
