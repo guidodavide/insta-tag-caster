@@ -20,26 +20,53 @@ $ pip install -r requirements.txt
 $ pip install . --user
 ```
 
-### Instagram, access tokens
-First retrieve the code from the script (use python-instagram):
-```bash
-$ cd python-instagram
-$ python get_access_token.py
-```
-Now retrieve a real token:
-```bash
-$ curl -F 'client_id=YOUR_CLIENT_ID' -F 'client_secret=YOUR_CLIENT_SECRET' -F 'grant_type=authorization_code' -F 'redirect_uri=https://github.com/guidodavide' -F 'code=YOUR_PREV_CODE' https://api.instagram.com/oauth/access_token
-```
-
 ## Running
 Run the Python lib:
 ```bash
-$ python -m com.guido.photochromecast.Test
+$ python -m com.guido.photochromecast.App
 ```
+### Usage
+Type help for help on commands.
 
-#### In case of This request requires scope=public_content
-Scope exception:
-http://stackoverflow.com/questions/33863505/oauthpermissionsexception-instagram-api-in-sandbox
-```bash
-https://api.instagram.com/oauth/authorize/?client_id=CLIENTID&redirect_uri=REDIRECT-URI&response_type=code&scope=SCOPE
-```
+##### web
+`> web [folder]`
+
+will create a web server on port 8080, with selected folder as root.
+
+`> stopWeb`
+will stop the web server.
+
+#### find
+`> find`
+
+will find reachable (in your subnet) Chromecasts.
+
+#### connect
+`> connect <name>`
+
+will connect photochromecast to the desired Chromecast, given the name.
+
+`> stop`
+will stop current casting (if active) and disconnect from Chromecast.
+
+#### displaying media
+`> cast`
+
+will start iterating on the selected folder, file by file.
+
+`> pause | resume`
+
+will pause/resume current slideshow.
+
+`> skip`
+
+will skip to the next media.
+
+`> time <timeout>`
+
+will change the slideshow timeout (accepts values in range [1,60])
+
+`> rm [filename]`
+
+will remove current displayed media from the slideshow list or remove the passed one.
+It's possible to remove directly files from the served folder too (same expected behavior).
