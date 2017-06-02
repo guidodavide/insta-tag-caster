@@ -100,6 +100,13 @@ class MyPrompt(Cmd):
         else:
             print("Start Casting first!")
 
+    def do_rm(self, args):
+        """Removes a media file from the queue displaying."""
+        if self.Caster.isStarted():
+            self.Caster.removeMedia()
+        else:
+            print("Start Casting first!")
+
     def do_find(self, args):
         """Finds Chromecasts in range."""
         self.Caster.findChromecasts()

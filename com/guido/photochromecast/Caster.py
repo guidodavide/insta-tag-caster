@@ -58,6 +58,7 @@ class CasterThread(object):
         '''Just to keep track of old files'''
         self.mOldFiles = {}
         self.mLock = threading.Lock()
+        self.mBlacklistSet = set()
 
     def bindWebServer(self, webServer=None):
         '''Link the active web server and retrieve the working folder'''
@@ -187,6 +188,35 @@ class CasterThread(object):
         finally:
             self.mLock.release()
 
+    def removeMedia(self, name=None):
+        if name is not None:
+            entry = self.mFilesMime.get(name)
+            if entry is not None:
+                self.mBlacklistSet.add(name)
+                currentActive = None
+                self.mLock.acquire()
+                try:
+                    currentActive = self.displayingMedia
+                finally:
+                    self.mLock.release()
+                if currentActive == name:
+                    self.skipCurrentMedia()
+                    print(str(currentActive) + " is blacklisted now")
+            else:
+                print("Media does not exist")
+        else:
+            blackListedEntry = None
+            self.mLock.acquire()
+            try:
+                blackListedEntry = self.displayingMedia
+                self.displayingMedia = None
+            finally:
+                self.mLock.release()
+
+            print(str(blackListedEntry) + " is blacklisted now")
+            self.mBlacklistSet.add(blackListedEntry)
+            self.skipCurrentMedia()
+
     def __multiple_file_types__(self, *patterns):
         return it.chain.from_iterable(glob.iglob(self.mFolder + "/" + pattern) for pattern in patterns)
 
@@ -201,20 +231,27 @@ class CasterThread(object):
     def cycle(self):
 
         starttime = time.time()
+        numOfFoundFiles = 0
 
         """Iterate till mStop is requested each second"""
         while not self.mStop:
 
             """Look for all files in folder and order by date"""
-            for filename in self.__find_media_and_order_by_date__():
-                base = basename(filename)
-                entry = self.mFilesMime.get(base)
-                """If it is the first time we see it, add to the displaying list"""
-                if entry is None:
-                    mime = mimetypes.MimeTypes().guess_type(filename)[0]
-                    self.mFilesMime[base] = mime
-                    self.mDeque.append(base)
+            listOfFiles = self.__find_media_and_order_by_date__()
+            """Don't update internal data structures if there's no need"""
+            if numOfFoundFiles is not len(listOfFiles):
+                numOfFoundFiles = len(listOfFiles)
+
+                for filename in listOfFiles:
+                    base = basename(filename)
+                    entry = self.mFilesMime.get(base)
+                    """If it is the first time we see it, add to the displaying list"""
+                    if entry is None and not entry in self.mBlacklistSet:
+                        mime = mimetypes.MimeTypes().guess_type(filename)[0]
+                        self.mFilesMime[base] = mime
+                        self.mDeque.append(base)
             
+            # Critical section here
             self.mLock.acquire()
             try:
                 localCyclingTimeout = self.mDCycle
@@ -223,8 +260,11 @@ class CasterThread(object):
             finally:
                 self.mLock.release()
 
+            """If we reached the timeout and we are not pausing on the current displayed media
+            or a skip is force, then we need to change media casted"""
             if (self.mCurIteration % localCyclingTimeout == 0 and not localPause) or localSkip:
 
+                """Reset cycle for the current media"""
                 self.mCurIteration = 0
 
                 '''If a video is playing and we are not in skip, do not change it'''
@@ -236,42 +276,56 @@ class CasterThread(object):
                             time.sleep(1.0 - ((time.time() - starttime) % 1.0))
                             continue
 
-                '''Restore skip to false'''
-                if localSkip is True:
-                    self.mLock.acquire()
-                    try:
-                        self.mSkip = False
-                    finally:
-                        self.mLock.release()
+                ####### Critical section here #######
+                self.mLock.acquire()
+                try:
+                    '''Restore skip to false'''
+                    self.mSkip = False
 
-                """If we reached the slideshow cycle, store the value"""
-                if self.displayingMedia is not None:
-                    entry = self.mOldFiles.get(self.displayingMedia)
-                    randInt = random.randint(1, 1000)
-                    """If None it's the first time we are going to store it"""
-                    if entry is None:
-                        self.prio_queue.put((1, randInt, self.displayingMedia))
-                        self.mOldFiles[self.displayingMedia] = 1
-                    else:
-                        newPrioInt = entry + 1
-                        self.prio_queue.put((newPrioInt, randInt, self.displayingMedia))
-                        self.mOldFiles[self.displayingMedia] = newPrioInt
-                
-                if len(self.mDeque) > 0:
-                    """Check whether we have something new to display"""
-                    self.displayingMedia = self.mDeque.popleft()
-                else:
-                    """If nothing new, we get from the random priority old story"""
-                    associatedPrio, associatedRandom, self.displayingMedia = self.prio_queue.get()
+                    """If we reached the slideshow cycle, store the current showed media
+                    in a 'oldFiles' structure and a priority queue"""
+                    if self.displayingMedia is not None:
+                        entry = self.mOldFiles.get(self.displayingMedia)
+                        randInt = random.randint(1, 1000)
+                        """If None it's the first time we are going to store it in
+                        the priority queue"""
+                        if entry is None:
+                            self.prio_queue.put((1, randInt, self.displayingMedia))
+                            self.mOldFiles[self.displayingMedia] = 1
+                        else:
+                            newPrioInt = entry + 1
+                            self.prio_queue.put((newPrioInt, randInt, self.displayingMedia))
+                            self.mOldFiles[self.displayingMedia] = newPrioInt
+
+                    """Now check for a 'next' media that needs to be casted"""
+                    if len(self.mDeque) > 0:
+                        """Check whether we have something new to display, directly from folder"""
+                        self.displayingMedia = self.mDeque.popleft()
+                    elif not self.prio_queue.empty():
+                        """If nothing new, we get from the random priority old story"""
+                        associatedPrio, associatedRandom, self.displayingMedia = self.prio_queue.get()
+
+                    """If it is blacklisted do not go on"""
+                    if self.displayingMedia in self.mBlacklistSet:
+                        self.displayingMedia = None
+
                     if self.displayingMedia is None:
+                        time.sleep(1.0 - ((time.time() - starttime) % 1.0))
                         continue
 
+                    """If the file does not exist anymore, treat it as blacklisted"""
+                    if not os.path.isfile(self.mFolder + "/" + self.displayingMedia):
+                        self.displayingMedia = None
+                        time.sleep(1.0 - ((time.time() - starttime) % 1.0))
+                        continue
 
-                associatedMime = self.mFilesMime[self.displayingMedia]
-                
+                    associatedMime = self.mFilesMime[self.displayingMedia]
+                finally:
+                    self.mLock.release()
+
+                """Prepare strings for chromecast interaction"""
                 string = str(str(self.mBaseAddress) + "/" + str(self.displayingMedia))
                 strMime = str(associatedMime)
-                # print("casting ", str(self.displayingMedia))
 
                 mc.play_media(string, strMime)
                 mc.block_until_active()
