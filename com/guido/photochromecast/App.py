@@ -59,6 +59,20 @@ class MyPrompt(Cmd):
             print("Casting is already running!")
         else:
             print("Please connect to a Chromecast first!")
+
+    def do_pause(self, args):
+        """Pause active casting on a connected Chromecast."""
+        if self.Caster.isStarted():
+            self.Caster.pauseOnMedia()
+        else:
+            print("Casting is not started yet! Please start it first.")
+
+    def do_resume(self, args):
+        """Resume casting on a connected Chromecast."""
+        if self.Caster.isStarted():
+            self.Caster.resumeMedia()
+        else:
+            print("Casting is not started yet! Please start it first.")
         
     def do_stop(self, args):
         """Stops casting to a connected Chromecast."""

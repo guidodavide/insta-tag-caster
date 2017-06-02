@@ -36,6 +36,7 @@ class CasterThread(object):
     mDeque = None
     mDCycle = 0
     mSkip = False
+    mPause = False
 
     mLock = None
     """Just a counter, count seconds"""
@@ -91,8 +92,16 @@ class CasterThread(object):
 
     def connectTo(self, name):
         '''Connect to a Chromecast in range, given the name'''
+        found = False
         self.mFoundChromecasts = pychromecast.get_chromecasts()
-        self.mChromecast = next(cc for cc in self.mFoundChromecasts if cc.device.friendly_name == name)
+        for cc in self.mFoundChromecasts:
+            if cc.device.friendly_name == name:
+                found = True
+                self.mChromecast = cc
+
+        if not found:
+            return str(name) + " is not in range"
+
         if self.mChromecast is not None:
             self.mChromecast.wait()
             self.mConnected = True
@@ -101,9 +110,18 @@ class CasterThread(object):
             return name + " was not found"
 
     def start(self,):
+        if not self.mConnected:
+            return "Caster is not connected!"
+
         self.mBaseAddress = self.mWebs.getBaseAddress()
         self.mThread = threading.Thread(target=self.cycle, name="CasterThread")
         self.mThread.daemon = True
+
+        if not self.mChromecast.is_idle:
+            print("Killing current running app")
+            self.mChromecast.quit_app()
+            time.sleep(5)
+
         self.mThread.start()
         self.mThreadStarted = True
     
@@ -155,6 +173,20 @@ class CasterThread(object):
         finally:
             self.mLock.release()
 
+    def pauseOnMedia(self):
+        self.mLock.acquire()
+        try:
+            self.mPause = True
+        finally:
+            self.mLock.release()
+
+    def resumeMedia(self):
+        self.mLock.acquire()
+        try:
+            self.mPause = False
+        finally:
+            self.mLock.release()
+
     def __multiple_file_types__(self, *patterns):
         return it.chain.from_iterable(glob.iglob(self.mFolder + "/" + pattern) for pattern in patterns)
 
@@ -187,10 +219,11 @@ class CasterThread(object):
             try:
                 localCyclingTimeout = self.mDCycle
                 localSkip = self.mSkip
+                localPause = self.mPause
             finally:
                 self.mLock.release()
 
-            if self.mCurIteration % localCyclingTimeout == 0 or localSkip:
+            if (self.mCurIteration % localCyclingTimeout == 0 and not localPause) or localSkip:
 
                 self.mCurIteration = 0
 
@@ -244,9 +277,10 @@ class CasterThread(object):
                 mc.block_until_active()
                 mc.pause()
                 mc.play()
-                delayChange = 2.1
+
+                delayChange = 1.2
             else:
-                delayChange = 0
+                delayChange = 0.0
             
             self.mCurIteration = self.mCurIteration + 1
 
