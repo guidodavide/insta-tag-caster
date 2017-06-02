@@ -35,6 +35,13 @@ class CasterThread(object):
     mFilesMime = None
     mDeque = None
     mDCycle = 0
+    mSkip = False
+
+    mLock = None
+    """Just a counter, count seconds"""
+    mCurIteration = 0
+    """Current file name displaying"""
+    displayingMedia = None
 
     def __init__(self, dutyCycle=10):
         '''
@@ -49,8 +56,10 @@ class CasterThread(object):
         self.mFilesMime = {}
         '''Just to keep track of old files'''
         self.mOldFiles = {}
+        self.mLock = threading.Lock()
 
     def bindWebServer(self, webServer=None):
+        '''Link the active web server and retrieve the working folder'''
         self.mWebs = webServer
         self.mFolder = self.mWebs.getWorkingFolder()
     
@@ -58,6 +67,7 @@ class CasterThread(object):
         self.mFoundChromecasts = pychromecast.get_chromecasts()
     
     def printChromecasts(self):
+        '''Return a string containing the Chromecasts in range'''
         if self.mFoundChromecasts is not None and len(self.mFoundChromecasts) > 0:
             string = 'Chromecasts in range: '
             for cc in self.mFoundChromecasts:
@@ -80,6 +90,7 @@ class CasterThread(object):
             return False
 
     def connectTo(self, name):
+        '''Connect to a Chromecast in range, given the name'''
         self.mFoundChromecasts = pychromecast.get_chromecasts()
         self.mChromecast = next(cc for cc in self.mFoundChromecasts if cc.device.friendly_name == name)
         if self.mChromecast is not None:
@@ -89,7 +100,7 @@ class CasterThread(object):
         else:
             return name + " was not found"
 
-    def start(self, ):
+    def start(self,):
         self.mBaseAddress = self.mWebs.getBaseAddress()
         self.mThread = threading.Thread(target=self.cycle, name="CasterThread")
         self.mThread.daemon = True
@@ -105,26 +116,61 @@ class CasterThread(object):
             mc = self.mChromecast.media_controller
             if mc is not None:
                 mc.stop()
-                mc.tear_down
+                mc.tear_down()
+            self.mChromecast.quit_app()
             self.mChromecast.disconnect()
             self.mChromecast.join()
-     
+
+    def __is_number__(self, s):
+        try:
+            int(s)
+            return True
+        except ValueError:
+            return False
+
+    def changeSlideShowTimeout(self, newTimer):
+        if newTimer is None or not self.__is_number__(newTimer):
+            print("Pass a valid timeout")
+            return
+
+        intVal = int(newTimer)
+        if intVal == self.mDCycle:
+            '''No change to the current slideshow time'''
+            return
+
+        self.mLock.acquire()
+        try:
+            if intVal < self.mDCycle:
+                self.mSkip = True
+                self.mDCycle = intVal
+            else:
+                self.mDCycle = intVal
+        finally:
+            self.mLock.release()
+
+    def skipCurrentMedia(self):
+        self.mLock.acquire()
+        try:
+            self.mSkip = True
+        finally:
+            self.mLock.release()
+
     def __multiple_file_types__(self, *patterns):
-        return it.chain.from_iterable(glob.iglob(self.mFolder+"/"+pattern) for pattern in patterns)
+        return it.chain.from_iterable(glob.iglob(self.mFolder + "/" + pattern) for pattern in patterns)
 
     def __find_media_and_order_by_date__(self):
-        files = glob.glob(self.mFolder + "/*")
-        files.sort(key=os.path.getmtime)
-        return files
+        types = ('*.jpg', '*.jpeg', '*.mp4', '*.png', '*.gif')
+        files_grabbed = []
+        for extension in types:
+            files_grabbed.extend(glob.glob(self.mFolder + "/" + extension))
+        files_grabbed.sort(key=os.path.getmtime)
+        return files_grabbed
 
     def cycle(self):
-        
-        """Just a counter, count seconds"""
-        currentIteration = 0
-        """Current file name displaying"""
-        displayingName = None
-        
-        """Iterate till mStop is requested"""
+
+        starttime = time.time()
+
+        """Iterate till mStop is requested each second"""
         while not self.mStop:
 
             """Look for all files in folder and order by date"""
@@ -137,50 +183,71 @@ class CasterThread(object):
                     self.mFilesMime[base] = mime
                     self.mDeque.append(base)
             
-            if currentIteration % self.mDCycle == 0:
-                mc = self.mChromecast.media_controller
-                if not mc.status is None:
-                    if not mc.status.media_is_photo and mc.status.player_is_playing:
-                        time.sleep(1)
-                        continue
+            self.mLock.acquire()
+            try:
+                localCyclingTimeout = self.mDCycle
+                localSkip = self.mSkip
+            finally:
+                self.mLock.release()
+
+            if self.mCurIteration % localCyclingTimeout == 0 or localSkip:
+
+                self.mCurIteration = 0
+
+                '''If a video is playing and we are not in skip, do not change it'''
+                if not localSkip:
+                    mc = self.mChromecast.media_controller
+                    if not mc.status is None:
+                        if not mc.status.media_is_photo and mc.status.player_is_playing:
+                            '''Skip increment and re-check next second'''
+                            time.sleep(1.0 - ((time.time() - starttime) % 1.0))
+                            continue
+
+                '''Restore skip to false'''
+                if localSkip is True:
+                    self.mLock.acquire()
+                    try:
+                        self.mSkip = False
+                    finally:
+                        self.mLock.release()
 
                 """If we reached the slideshow cycle, store the value"""
-                if displayingName is not None:
-                    entry = self.mOldFiles.get(displayingName)
-                    randInt = random.randint(1, 200)
+                if self.displayingMedia is not None:
+                    entry = self.mOldFiles.get(self.displayingMedia)
+                    randInt = random.randint(1, 1000)
                     """If None it's the first time we are going to store it"""
                     if entry is None:
-                        self.prio_queue.put((1, randInt, displayingName))
-                        self.mOldFiles[displayingName] = 1
+                        self.prio_queue.put((1, randInt, self.displayingMedia))
+                        self.mOldFiles[self.displayingMedia] = 1
                     else:
                         newPrioInt = entry + 1
-                        self.prio_queue.put((newPrioInt, randInt, displayingName))
-                        self.mOldFiles[displayingName] = newPrioInt
+                        self.prio_queue.put((newPrioInt, randInt, self.displayingMedia))
+                        self.mOldFiles[self.displayingMedia] = newPrioInt
                 
                 if len(self.mDeque) > 0:
                     """Check whether we have something new to display"""
-                    displayingName = self.mDeque.popleft()
+                    self.displayingMedia = self.mDeque.popleft()
                 else:
                     """If nothing new, we get from the random priority old story"""
-                    associatedPrio, associatedRandom, displayingName = self.prio_queue.get()
-                    if displayingName is None:
+                    associatedPrio, associatedRandom, self.displayingMedia = self.prio_queue.get()
+                    if self.displayingMedia is None:
                         continue
 
 
-                associatedMime = self.mFilesMime[displayingName]
+                associatedMime = self.mFilesMime[self.displayingMedia]
                 
-                string = str(str(self.mBaseAddress)+"/"+str(displayingName))
+                string = str(str(self.mBaseAddress) + "/" + str(self.displayingMedia))
                 strMime = str(associatedMime)
-                print("displaying url ", string)
+                # print("casting ", str(self.displayingMedia))
 
                 mc.play_media(string, strMime)
                 mc.block_until_active()
                 mc.pause()
                 mc.play()
+                delayChange = 1.8
+            else:
+                delayChange = 0
             
-            currentIteration = currentIteration + 1
+            self.mCurIteration = self.mCurIteration + 1
 
-            time.sleep(1)
-            
-
-        
+            time.sleep(1.0 + delayChange - ((time.time() - starttime) % 1.0))

@@ -67,13 +67,25 @@ class MyPrompt(Cmd):
         else:
             print("Casting is not started yet! Please start it first.")
     
-    def do_changeTiming(self, args):
+    def do_time(self, args):
         """Change current slideshow time in use."""
+        l = args.split()
+        if len(l) != 1:
+            print("Pass a new slideshow timeout")
+            return
+
         if self.Caster.isStarted():
-            print("Not implemented yet")
+            self.Caster.changeSlideShowTimeout(l[0])
         else:
             print("Start Casting first!")
-        
+
+    def do_skip(self, args):
+        """Skip current displaying media."""
+        if self.Caster.isStarted():
+            self.Caster.skipCurrentMedia()
+        else:
+            print("Start Casting first!")
+
     def do_find(self, args):
         """Finds Chromecasts in range."""
         self.Caster.findChromecasts()
