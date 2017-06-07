@@ -59,11 +59,11 @@ class CasterThread(object):
     mFolder = None
     mBaseAddress = None
     mThread = None
-    
+
     mStop = False
     mConnected = False
     mThreadStarted = False
-    
+
     mFoundChromecasts = None
     mChromecast = None
     mWebs = None
@@ -76,7 +76,7 @@ class CasterThread(object):
     connectionLost = False
     prepareForDisconnection = False
     failTriggers = 0
-    
+
     mFilesMime = None
     mDeque = None
     mDCycle = 0
@@ -114,11 +114,11 @@ class CasterThread(object):
         '''Link the active web server and retrieve the working folder.'''
         self.mWebs = webServer
         self.mFolder = self.mWebs.getWorkingFolder()
-    
+
     def findChromecasts(self):
         """Finds all chromecasts in range and stores them internally."""
         self.mFoundChromecasts = pychromecast.get_chromecasts()
-    
+
     def printChromecasts(self):
         '''Return a string containing the Chromecasts in range'''
         if self.mFoundChromecasts is not None and len(self.mFoundChromecasts) > 0:
@@ -128,7 +128,7 @@ class CasterThread(object):
             return string
         else:
             return "Please, search again.. no Chromecasts found"
-            
+
 
     def isStarted(self):
         if self.mThreadStarted:
@@ -395,9 +395,10 @@ class CasterThread(object):
     def __quit_app__(self, wait=True):
         """Quits the active app on Chromecast and waits a bit."""
         if self.mChromecast is not None:
-            self.mChromecast.quit_app()
-            if wait:
-                time.sleep(5)
+            if self.mChromecast.socket_client._check_connection():
+                self.mChromecast.quit_app()
+                if wait:
+                    time.sleep(5)
 
     def __retry_reconnection__(self):
         """Retry to reconnect to the previous known Chromecast.
@@ -421,6 +422,7 @@ class CasterThread(object):
                 if now >= 10.0:
                     # If it takes more than 10 seconds to connect to it..
                     # return :(
+                    print("Cannot connect back again")
                     return reconnectedOK
                 # If it is connected now
                 self.__quit_app__()
@@ -456,6 +458,7 @@ class CasterThread(object):
 
             """Retry Connection due to a failure"""
             if self.mRetryConnection or self.connectionLost:
+                print("Re-Connection kicks in")
                 if self.connectionLost:
                     mc = self.mChromecast.media_controller
                     self.__disconnect_active_stream_due_to_failure__(mc)
@@ -469,6 +472,7 @@ class CasterThread(object):
                     print("Trying again a re-connection...")
                     continue
                 elif reconnection is True:
+                    print("Re-connection successful!")
                     maxRetry = 0
                     continue
                 else:
@@ -490,7 +494,7 @@ class CasterThread(object):
                         mime = mimetypes.MimeTypes().guess_type(filename)[0]
                         self.mFilesMime[base] = mime
                         self.mDeque.append(base)
-            
+
             ####### Critical section here #######
             self.mLock.acquire()
             try:
@@ -617,7 +621,7 @@ class CasterThread(object):
                     now = (time.time()) - oldTime
                     # If I'm waiting more then 10 second for an effective start
                     if now > MAX_PLAYING_STATUS_UPDATE_DELAY or self.connectionLost:
-                        print("Still buffering, force reconnection")
+                        print("\nStill buffering, force reconnection")
                         self.displayingVideo = False
                         self.mCurIteration = 0
                         self.__disconnect_active_stream_due_to_failure__(mc)
@@ -629,7 +633,7 @@ class CasterThread(object):
                 delayChange = 1.2
             else:
                 delayChange = 0.0
-            
+
             self.mCurIteration = self.mCurIteration + 1
 
             self.__sleep_now__(delayChange, starttime)
