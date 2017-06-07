@@ -29,20 +29,50 @@ class RootedHTTPServer(HTTPServer):
     def serve_forever(self):
         while not self.stopped:
             self.handle_request()
+
+    def handle_error(self, request, client_address):
+        # Do not print errors
+        #HTTPServer.handle_error(self, request, client_address)
+        pass
     
     def force_stop(self):
         self.stopped = True
         try:
             urllib2.urlopen(
-                'http://%s:%s/' % (self.server_name, self.server_port))
+                'http://%s:%s/' % (self.server_name, self.server_port), timeout=1.5)
         except urllib2.URLError:
             # If the server is already shut down, we receive a socket error,
             # which we ignore.
+            try:
+                self.server_close()
+            except:
+                pass
             pass
-        self.server_close()
+        # Avoids annoying messages on close
+        try:
+            self.server_close()
+        except:
+            pass
 
 
 class RootedHTTPRequestHandler(SimpleHTTPRequestHandler):
+
+    protocol_version = 'HTTP/1.1'
+    extensions_map = SimpleHTTPRequestHandler.extensions_map.copy()
+    extensions_map.update({
+        '': 'application/octet-stream', # Default
+        '.py': 'text/plain',
+        '.c': 'text/plain',
+        '.h': 'text/plain',
+        '.mp4' : 'video/mp4',
+        '.ogg' : 'video/ogg',
+        '.webm': 'video/webm',
+        '.jpg' : 'image/jpeg',
+        '.jpeg' : 'image/jpeg',
+        '.png' : 'image/png',
+        '.gif' : 'image/gif',
+    })
+
 
     def translate_path(self, path):
         path = posixpath.normpath(urllib.unquote(path))
@@ -58,12 +88,15 @@ class RootedHTTPRequestHandler(SimpleHTTPRequestHandler):
         return path
     
     def log_message(self, format, *args):
+        # Avoid logging messages
         pass
     
     def log_request(self, code='-', size='-'):
+        # Avoid logging requests
         pass
     
     def log_error(self, format, *args):
+        # Avoid logging errors
         pass
 
 
@@ -123,8 +156,11 @@ class WebServerClass(object):
 
     def stopServingRequests(self):
         if not self.mThread is None and not self.mHttpd is None:
-            self.mHttpd.force_stop()
-            self.mThread.join(None)  
+            try:
+                self.mHttpd.force_stop()
+            except:
+                pass
+            self.mThread.join(timeout=2)
         self.mRunnnig = False
     
     def isRunning(self):

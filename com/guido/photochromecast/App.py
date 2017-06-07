@@ -9,12 +9,22 @@ from WebServer import WebServerClass
 from Caster import CasterThread
 
 class MyPrompt(Cmd):
-
+    '''
+    It's like a main.
+    A looping cmd prompt with basic commands for Cast interactions.
+    '''
+    # The Web Server, required to provide urls for Chromecast
     WebS = None
+    # A running thread for Chromecast interactions
     Caster = None
 
+    '''
+    Find Chromecasts, start web service, connect to Chromecast and then cast media.
+    '''
+
     def do_web(self, args):
-        """Starts web server, serving on port 8080. By default, 'demo-test' is used as a folder"""
+        """Starts web server, serving on port 8080.
+By default, 'demo-test' is used as a folder if no path is passed."""
         if len(args) == 0:
             print("Using demo-test folder")
             folder = 'demo-test'
@@ -33,7 +43,7 @@ class MyPrompt(Cmd):
             self.WebS.startServingRequests()
     
     def do_stopWeb(self, args):
-        """Stops web server."""
+        """Stops an active web server."""
         if not self.WebS is None and self.WebS.isRunning():
             self.WebS.stopServingRequests()
     
@@ -52,7 +62,7 @@ class MyPrompt(Cmd):
                 print(msg)
     
     def do_cast(self, args):
-        """Starts casting to a connected Chromecast."""
+        """Starts casting to an already connected Chromecast device."""
         if not self.Caster.isStarted() and self.Caster.isConnected():
             self.Caster.start()
         elif self.Caster.isStarted():
@@ -68,14 +78,15 @@ class MyPrompt(Cmd):
             print("Casting is not started yet! Please start it first.")
 
     def do_resume(self, args):
-        """Resume casting on a connected Chromecast."""
+        """Resume casting on a connected Chromecast, slideshow will continue."""
         if self.Caster.isStarted():
             self.Caster.resumeMedia()
         else:
             print("Casting is not started yet! Please start it first.")
         
     def do_stop(self, args):
-        """Stops casting to a connected Chromecast."""
+        """Stops casting to a connected Chromecast.
+After this command you must issue a 'connect' again."""
         if self.Caster.isStarted():
             self.Caster.stop()
         else:
@@ -93,6 +104,13 @@ class MyPrompt(Cmd):
         else:
             print("Start Casting first!")
 
+    def do_getTime(self, args):
+        """Return the current slideshow timeout set"""
+        if self.Caster.isStarted():
+            print("Current timeout " + str(self.Caster.getSlideShowTimeout()))
+        else:
+            print("Start Casting first!")
+
     def do_skip(self, args):
         """Skip current displaying media."""
         if self.Caster.isStarted():
@@ -101,7 +119,7 @@ class MyPrompt(Cmd):
             print("Start Casting first!")
 
     def do_rm(self, args):
-        """Removes a media file from the queue displaying."""
+        """Removes a media file from the queue of displaying media."""
         if self.Caster.isStarted():
             self.Caster.removeMedia()
         else:
@@ -113,14 +131,14 @@ class MyPrompt(Cmd):
         print(self.Caster.printChromecasts())
 
     def do_quit(self, args):
-        """Quits the program."""
-        self.do_stopWeb(None)
+        """Quits the program. You can use this directly, stop is implied."""
         if self.Caster.isConnected():
             self.Caster.stop()
-
+        self.do_stopWeb(None)
         print("Quit.")
         raise SystemExit
 
+    # Avoids to repeat the previous command on RETURN pressure!
     def emptyline(self):
         return
 
