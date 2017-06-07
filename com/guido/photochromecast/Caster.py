@@ -48,7 +48,7 @@ MAX_RECONNECTION_RETRIES_IN_A_ROW = 3
 # Max timeout between a play request and a real ACK from Chromecast
 MAX_PLAYING_REQ_TIMEOUT = 5.0
 # Max length of a video on instagram
-MAX_INSTAGRAM_VIDEO_DURATION = 60
+MAX_INSTAGRAM_VIDEO_DURATION = 10
 # Max timeout between an ACK of play and real status change
 MAX_PLAYING_STATUS_UPDATE_DELAY = 15.0
 
@@ -511,7 +511,7 @@ class CasterThread(object):
                 self.mCurIteration = 0
 
                 '''If a video is playing and we are not in skip, do not change it. Wait its end.'''
-                if not localSkip:
+                if not localSkip and not self.connectionLost:
                     mc = self.mChromecast.media_controller
                     if not mc.status is None:
                         if mc.status.supports_seek and mc.status.player_is_playing:
@@ -603,7 +603,7 @@ class CasterThread(object):
 
                 self.photoIsReallyStarted = False
                 self.videoIsReallyStarted = False
-                # Assume at most 60 seconds (max Instagram length for videos)
+                # Assume at most 10 seconds if not communicated by Chromecast
                 self.videoDuration = MAX_INSTAGRAM_VIDEO_DURATION
 
                 if "image" not in strMime:
