@@ -46,9 +46,9 @@ MAX_CONNECTION_FAILURES_IN_A_ROW = 10
 # Max reconnection retries in a row
 MAX_RECONNECTION_RETRIES_IN_A_ROW = 3
 # Max timeout between a play request and a real ACK from Chromecast
-MAX_PLAYING_REQ_TIMEOUT = 5.0
+MAX_PLAYING_REQ_TIMEOUT = 10.0
 # Max length of a video on instagram
-MAX_INSTAGRAM_VIDEO_DURATION = 10
+MAX_INSTAGRAM_VIDEO_DURATION = 6
 # Max timeout between an ACK of play and real status change
 MAX_PLAYING_STATUS_UPDATE_DELAY = 15.0
 
@@ -409,6 +409,7 @@ class CasterThread(object):
         myName = self.mChromecast.device.friendly_name
         # Quit current app
         self.__quit_app__()
+        self.mChromecast.disconnect(timeout=3)
 
         # Search again from chromecasts
         self.findChromecasts()
@@ -474,6 +475,8 @@ class CasterThread(object):
                 elif reconnection is True:
                     print("Re-connection successful!")
                     maxRetry = 0
+                    self.connectionLost = False
+                    self.mCurIteration = 0
                     continue
                 else:
                     print("Unfortunately I was not able to connect to the same Chromecast again!\n" +
