@@ -444,6 +444,7 @@ class CasterThread(object):
         firstTimeSleepingForVideo = 0
         # Internally in use, just to keep track of max re-connection retries
         maxRetry = 0
+        maxPriority = 1
 
         """Iterate till mStop is requested.
         Each second:
@@ -547,14 +548,17 @@ class CasterThread(object):
                     in a 'oldFiles' data structure (with associated prio) and in a  priority queue"""
                     if self.displayingMedia is not None:
                         previousPriority = self.mOldFiles.get(self.displayingMedia)
-                        randInt = random.randint(1, 1000)
+                        randomSys = random.SystemRandom()
+                        randInt = randomSys.randint(1, 5000)
                         """If None it's the first time we are going to store it in
                         the priority queue"""
                         if previousPriority is None:
-                            self.prio_queue.put((1, randInt, self.displayingMedia))
-                            self.mOldFiles[self.displayingMedia] = 1
+                            self.prio_queue.put((maxPriority, randInt, self.displayingMedia))
+                            self.mOldFiles[self.displayingMedia] = maxPriority
                         else:
                             newPrioInt = previousPriority + 1
+                            if newPrioInt > maxPriority:
+                                maxPriority = newPrioInt
                             self.prio_queue.put((newPrioInt, randInt, self.displayingMedia))
                             self.mOldFiles[self.displayingMedia] = newPrioInt
 
